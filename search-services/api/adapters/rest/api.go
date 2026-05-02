@@ -11,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/VictoriaMetrics/metrics"
 	"yadro.com/course/api/core"
+	"yadro.com/course/closers"
 )
 
 const (
@@ -36,6 +38,16 @@ type UpdateStatsDto struct {
 type SearchResponse struct {
 	Comics []core.Comics `json:"comics"`
 	Total  int           `json:"total"`
+}
+type LoginRequest struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+func NewMetricsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		metrics.WritePrometheus(w, true)
+	}
 }
 
 func NewPingHandler(log *slog.Logger, pingers map[string]core.Pinger) http.HandlerFunc {
@@ -80,6 +92,37 @@ func NewPingHandler(log *slog.Logger, pingers map[string]core.Pinger) http.Handl
 		}
 
 		sendJSON(w, log, PingResponse{Replies: replies})
+	}
+}
+
+type Authenticator interface {
+	Login(user, password string) (string, error)
+}
+
+func NewLoginHandler(log *slog.Logger, auth Authenticator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		loginReq := LoginRequest{}
+
+		err := json.NewDecoder(r.Body).Decode(&loginReq)
+		if err != nil {
+			http.Error(w, "error when decode request body", http.StatusInternalServerError)
+			log.Error("error when decode request body in login handler", "error", err, "loginReq", loginReq)
+			return
+		}
+
+		defer closers.CloseOrLog(r.Body, log)
+
+		tokenString, err := auth.Login(loginReq.Name, loginReq.Password)
+		if err != nil {
+			http.Error(w, "incorrect login or password", http.StatusUnauthorized)
+			log.Error("error when login", "name", loginReq.Name, "password", loginReq.Password, "error", err)
+			return
+		}
+
+		_, err = fmt.Fprint(w, tokenString) // критический Fprint... около часа потратил, чтобы понять почему падают тесты, а дело было в символе переноса строки у Fprintln
+		if err != nil {
+			log.Error("error when send response body", "error", err)
+		}
 	}
 }
 
@@ -240,7 +283,7 @@ func NewSearchHandler(log *slog.Logger, search core.Searcher) http.HandlerFunc {
 	}
 }
 
-func NewISearchHandler(log *slog.Logger, isearch core.ISearcher) http.HandlerFunc {
+func NewSearchIndexHandler(log *slog.Logger, isearch core.ISearcher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		limit := standartLimit
 

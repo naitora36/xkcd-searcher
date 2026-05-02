@@ -12,11 +12,16 @@ services:
     volumes:
       - ./search-services/api/config.yaml:/config.yaml
     environment:
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=password
+      - TOKEN_TTL=2m
       - API_ADDRESS=:8080
       - WORDS_ADDRESS=words:8080
       - UPDATE_ADDRESS=update:8080
       - SEARCH_ADDRESS=search:8080
       - ISEARCH_ADDRESS=isearch:8080
+      - SEARCH_CONCURRENCY=10
+      - SEARCH_RATE=100
     depends_on:
       - words
       - update
@@ -79,6 +84,7 @@ services:
         condition: service_healthy
       words:
         condition: service_started
+
   isearch:
     image: isearch:latest
     build:
@@ -118,7 +124,7 @@ services:
     volumes:
       - postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD", "pg_isready"]
+      test: [ "CMD", "pg_isready" ]
       interval: 10s
       retries: 5
       start_period: 30s
@@ -139,6 +145,33 @@ services:
     depends_on:
       - postgres
 
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.125.0
+    container_name: victoriametrics
+    ports:
+      - 8428:8428
+    volumes:
+      - vmdata:/storage
+      - ./metrics/promscrape.yml:/etc/promscrape.yml
+    command:
+      - "--storageDataPath=/storage"
+      - "--httpListenAddr=:8428"
+      - "--promscrape.config=/etc/promscrape.yml"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    container_name: grafana
+    depends_on:
+      - "victoriametrics"
+    ports:
+      - 3000:3000
+    volumes:
+      - grafanadata:/var/lib/grafana
+    restart: unless-stopped
+
 volumes:
   postgres:
   pgadmin:
+  vmdata:
+  grafanadata:

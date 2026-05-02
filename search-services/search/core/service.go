@@ -49,7 +49,6 @@ func (s *Service) Search(ctx context.Context, req *SearchRequest) (*SearchReply,
 
 		if score > 0.0 {
 			scored = append(scored, scoredComic{comic: comic, score: score})
-			slog.Info("score bucket", "id", comic.ID, "score", score)
 		}
 	}
 

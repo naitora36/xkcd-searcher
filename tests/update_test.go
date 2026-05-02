@@ -1,8 +1,10 @@
 package api_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"testing"
@@ -22,23 +24,6 @@ type UpdateStatus struct {
 	Status string `json:"status"`
 }
 
-func prepare(t *testing.T) {
-	req, err := http.NewRequest(http.MethodDelete, address+"/api/db", nil)
-	require.NoError(t, err, "cannot make request")
-	resp, err := client.Do(req)
-	require.NoError(t, err, "could not send clean up command")
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	updateStats := stats(t)
-	require.Equal(t, 0, updateStats.ComicsFetched)
-	require.True(t, updateStats.ComicsTotal > 3000, "there are more than 3000 comics in XKCD")
-	require.Equal(t, 0, updateStats.WordsTotal)
-	require.Equal(t, 0, updateStats.WordsUnique)
-	updateStatus, err := status()
-	require.Equal(t, "idle", updateStatus, err)
-}
-
 func TestEmptyDB(t *testing.T) {
 	prepare(t)
 }
@@ -50,12 +35,13 @@ func TestUpdate(t *testing.T) {
 	var err1, err2, err3 error
 	var res1, res2 int
 	var res3 string
+	token := login(t)
 	go func() {
-		res1, err1 = update()
+		res1, err1 = update(token)
 		wg.Done()
 	}()
 	go func() {
-		res2, err2 = update()
+		res2, err2 = update(token)
 		wg.Done()
 	}()
 	go func() {
@@ -82,12 +68,45 @@ func TestUpdate(t *testing.T) {
 	prepare(t)
 }
 
+func login(t *testing.T) string {
+	data := bytes.NewBufferString(`{"name":"admin", "password":"password"}`)
+	req, err := http.NewRequest(http.MethodPost, address+"/api/login", data)
+	require.NoError(t, err, "cannot make request")
+	resp, err := client.Do(req)
+	require.NoError(t, err, "could not send login command")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	token, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return string(token)
+}
+
+func prepare(t *testing.T) {
+	req, err := http.NewRequest(http.MethodDelete, address+"/api/db", nil)
+	require.NoError(t, err, "cannot make request")
+	token := login(t)
+	req.Header.Add("Authorization", "Token "+token)
+	resp, err := client.Do(req)
+	require.NoError(t, err, "could not send clean up command")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	updateStats := stats(t)
+	require.Equal(t, 0, updateStats.ComicsFetched)
+	require.True(t, updateStats.ComicsTotal > 3000, "there are more than 3000 comics in XKCD")
+	require.Equal(t, 0, updateStats.WordsTotal)
+	require.Equal(t, 0, updateStats.WordsUnique)
+	updateStatus, err := status()
+	require.Equal(t, "idle", updateStatus, err)
+}
+
 // this must not contain t because it runs in a waited goroutine
-func update() (int, error) {
+func update(token string) (int, error) {
 	req, err := http.NewRequest(http.MethodPost, address+"/api/db/update", nil)
 	if err != nil {
 		return 0, err
 	}
+	req.Header.Add("Authorization", "Token "+token)
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err

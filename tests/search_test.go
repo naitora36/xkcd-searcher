@@ -21,7 +21,8 @@ type ComicsReply struct {
 }
 
 func TestSearch(t *testing.T) {
-	_, err := update()
+	token := login(t)
+	_, err := update(token)
 	require.NoError(t, err, "could not run update")
 	t.Run("no phrase", SearchNoPhrase)
 	t.Run("bad limit minus", SearchBadLimitMinus)
@@ -134,7 +135,8 @@ func IndexSearchPhrases(t *testing.T) {
 	require.Equal(t, 0, len(comics.Comics))
 
 	// update DB and wait 30 sec for index update
-	_, err = update()
+	token := login(t)
+	_, err = update(token)
 	require.NoError(t, err, "could not run update")
 	time.Sleep(30 * time.Second)
 
