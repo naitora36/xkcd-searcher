@@ -20,7 +20,7 @@ func NewService(log *slog.Logger, db DB, words Words) (*Service, error) {
 	}, nil
 }
 
-func (s Service) Search(ctx context.Context, req *SearchRequest) (*SearchReply, error) {
+func (s *Service) Search(ctx context.Context, req *SearchRequest) (*SearchReply, error) {
 	type scoredComic struct {
 		comic DBComic
 		score float64

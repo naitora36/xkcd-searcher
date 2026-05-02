@@ -13,11 +13,12 @@ type HTTPConfig struct {
 }
 
 type Config struct {
-	LogLevel      string     `yaml:"log_level" env:"LOG_LEVEL" env-default:"DEBUG"`
-	HTTPConfig    HTTPConfig `yaml:"api_server"`
-	WordsAddress  string     `yaml:"words_address" env:"WORDS_ADDRESS" env-default:"words:81"`
-	UpdateAddress string     `yaml:"update_address" env:"UPDATE_ADDRESS" env-default:"update:82"`
-	SearchAddress string     `yaml:"search_address" env:"SEARCH_ADDRESS" env-default:"search:83"`
+	LogLevel       string     `yaml:"log_level" env:"LOG_LEVEL" env-default:"DEBUG"`
+	HTTPConfig     HTTPConfig `yaml:"api_server"`
+	WordsAddress   string     `yaml:"words_address" env:"WORDS_ADDRESS" env-default:"words:81"`
+	UpdateAddress  string     `yaml:"update_address" env:"UPDATE_ADDRESS" env-default:"update:82"`
+	SearchAddress  string     `yaml:"search_address" env:"SEARCH_ADDRESS" env-default:"search:83"`
+	ISearchAddress string     `yaml:"isearch_address" env:"ISEARCH_ADDRESS" env-default:"search:84"`
 }
 
 func MustLoad(configPath string) Config {

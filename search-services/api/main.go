@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 
+	"yadro.com/course/api/adapters/isearch"
 	"yadro.com/course/api/adapters/rest"
 	"yadro.com/course/api/adapters/search"
 	"yadro.com/course/api/adapters/update"
@@ -51,18 +52,26 @@ func run(cfg *config.Config, log *slog.Logger) error {
 
 	searchClient, err := search.NewClient(cfg.SearchAddress, log)
 	if err != nil {
-		return fmt.Errorf("cannot init words adapter: %w", err)
+		return fmt.Errorf("cannot init search adapter: %w", err)
 	}
 	defer closers.CloseOrLog(searchClient.Conn, log)
 
+	isearchClient, err := isearch.NewClient(cfg.ISearchAddress, log)
+	if err != nil {
+		return fmt.Errorf("cannot init isearch adapter: %w", err)
+	}
+	defer closers.CloseOrLog(isearchClient.Conn, log)
+
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/words", rest.NewWordsHandler(log, wordsClient))
-	mux.Handle("GET /api/ping", rest.NewPingHandler(log, map[string]core.Pinger{"words": wordsClient, "update": updateClient, "search": searchClient}))
+	mux.Handle("GET /api/ping", rest.NewPingHandler(log, map[string]core.Pinger{"words": wordsClient, "update": updateClient, "search": searchClient, "isearch": isearchClient}))
 	mux.Handle("POST /api/db/update", rest.NewUpdateHandler(log, updateClient))
 	mux.Handle("GET /api/db/stats", rest.NewUpdateStatsHandler(log, updateClient))
 	mux.Handle("GET /api/db/status", rest.NewUpdateStatusHandler(log, updateClient))
 	mux.Handle("DELETE /api/db", rest.NewDropHandler(log, updateClient))
 	mux.Handle("GET /api/search", rest.NewSearchHandler(log, searchClient))
+	mux.Handle("GET /api/isearch", rest.NewISearchHandler(log, isearchClient))
+
 	server := http.Server{
 		Addr:        cfg.HTTPConfig.Address,
 		ReadTimeout: cfg.HTTPConfig.Timeout,

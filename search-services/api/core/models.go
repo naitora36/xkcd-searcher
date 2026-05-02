@@ -18,4 +18,5 @@ type UpdateStats struct {
 type Comics struct {
 	ID  int
 	URL string
+	// Score int - зачем?
 }

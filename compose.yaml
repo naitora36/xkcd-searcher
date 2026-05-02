@@ -16,6 +16,7 @@ services:
       - WORDS_ADDRESS=words:8080
       - UPDATE_ADDRESS=update:8080
       - SEARCH_ADDRESS=search:8080
+      - ISEARCH_ADDRESS=isearch:8080
     depends_on:
       - words
       - update
@@ -57,6 +58,7 @@ services:
         condition: service_healthy
       words:
         condition: service_started
+
   search:
     image: search:latest
     build:
@@ -77,7 +79,27 @@ services:
         condition: service_healthy
       words:
         condition: service_started
-
+  isearch:
+    image: isearch:latest
+    build:
+      context: search-services
+      dockerfile: Dockerfile.isearch
+    container_name: isearch
+    restart: unless-stopped
+    ports:
+      - 28084:8080
+    volumes:
+      - ./search-services/isearch/config.yaml:/config.yaml
+    environment:
+      - ISEARCH_ADDRESS=:8080
+      - DB_ADDRESS=postgres://postgres:password@postgres:5432/postgres
+      - WORDS_ADDRESS=words:8080
+      - INDEX_TTL=20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      words:
+        condition: service_started
   tests:
     image: tests:latest
     build: tests

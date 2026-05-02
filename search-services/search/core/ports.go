@@ -5,6 +5,7 @@ import "context"
 type Searcher interface {
 	Search(context.Context, *SearchRequest) (*SearchReply, error)
 }
+
 type Words interface {
 	Norm(ctx context.Context, phrase string) ([]string, error)
 }

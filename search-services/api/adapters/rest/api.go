@@ -240,6 +240,45 @@ func NewSearchHandler(log *slog.Logger, search core.Searcher) http.HandlerFunc {
 	}
 }
 
+func NewISearchHandler(log *slog.Logger, isearch core.ISearcher) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limit := standartLimit
+
+		queryValues := r.URL.Query()
+
+		limitString := queryValues.Get(limitKey)
+		if limitString != "" {
+			val, err := strconv.Atoi(limitString)
+			if err != nil {
+				http.Error(w, "wrong limit value, it must be a integer value bigger than zero", http.StatusBadRequest)
+				log.Warn("error when convert limit to int", "limit_string", limitString, "error", err)
+				return
+			}
+			limit = val
+		}
+
+		phrase := queryValues.Get(phraseKey)
+		if phrase == "" {
+			http.Error(w, "phrase cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		comics, err := isearch.SearchIndex(r.Context(), phrase, limit)
+		if err != nil {
+			http.Error(w, core.ErrInternal.Error(), http.StatusInternalServerError)
+			log.Error("fatal error when make search request", "error", err)
+			return
+		}
+
+		res := SearchResponse{
+			Comics: comics,
+			Total:  len(comics),
+		}
+
+		sendJSON(w, log, &res)
+	}
+}
+
 func sendJSON(w http.ResponseWriter, log *slog.Logger, data any) {
 	body, err := json.Marshal(data)
 	if err != nil {
