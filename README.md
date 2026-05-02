@@ -1,75 +1,80 @@
-# Hello web server
+# Hello gRPC
 
-## Цель
+## Hello gRPC server
 
-Создать два простых микросервиса, обслуживающих клиентов по REST протоколу, - hello и fileserver.
+Создать микросервис, обслуживающий клиентов по gRPC протоколу, - Pet Name Generator.
 
-У hello сервиса должно быть 2 эндпоинта:
+Вам дан proto файл, методы которого нужно реализовать в коде:
 
-1. GET /ping - отвечаем HTTP OK и pong
-2. GET /hello?name=Misha - отвечаем HTTP OK и Hello, Misha!
+1. Generate - генерируем случайное имя по заданным в запросе количеству слов и разделителе
+2. GenerateMany - то же самое, но дополнительно задается количество имен. В этом запросе сервер
+отвечает потоком имен.
 
-Fileserver должен идеоматично имплементировать CRUD для файлового хранилища:
+Для генерации случайных имен необходимо использовать библиотеку
+[golang-petname](https://github.com/dustinkirkland/golang-petname)
 
-1. POST /files - должен принимать файл в multipart форме и записывать его в определенную
-пользователем папку. Ключ формы - "file". Возвращает статус "Created" и имя файла.
-Если файл уже есть, возвращает статус "Conflict".
-2. PUT /files/filename - заменяет содержимое файла в файловом хранилище. Имя файла записано в пути.
-Файл должен существовать, иначе возвращает статус "NotFound".
-3. GET /files - листинг файлов, отсортирован по именам, одно имя на строчку.
-4. GET /files/filename - отдает точное содержание, если не найден - статус "NotFound"
-5. DELETE /files/filename - идемпотентно удаляет файл.
+Сервис должен возвращать gRPC ошибку
+[InvalidArgument](https://pkg.go.dev/google.golang.org/grpc/codes#pkg-constants), если
+пользователь послал количество слов или имен <= 0.
 
 Сервис должен собираться и запускаться через предоставленный compose файл,
 а также проходить интеграционные тесты - запуск специального тест контейнера.
 
+Для тестирования сервиса можно использовать [gRPC curl](https://github.com/fullstorydev/grpcurl)
+или [gRPC ui](https://github.com/fullstorydev/grpcui)
+
 Полезные curl-ы:
 
 ```bash
-curl -v -X POST -F file=@file1.txt localhost:28081/files
-curl -v localhost:28081/files
-curl -v localhost:28080/files/file.txt
-curl -v -X DELETE localhost:28081/files/file1.txt
+grpcurl -plaintext  localhost:28081 list
+grpcurl -plaintext  localhost:28081 list petname.PetnameGenerator
+grpcurl -plaintext  localhost:28081 petname.PetnameGenerator.Ping
+grpcurl -plaintext -d '{"words": 3, "separator": " "}' localhost:28081 petname.PetnameGenerator.Generate
 ```
+
+## Нормализация поисковых запросов, часть 1
+
+Создать микросервис, обслуживающий клиентов по gRPC протоколу, - Words Normalizer.
+
+Mикросервис нормализации слов должен работать в соответсвии с предложенным proto-файлом.
+Сервис должен принимать на вход строку (на английском) и возвращать назад нормализованный вид
+в виде слайса слов. То есть при посылке "follower brings bunch of questions" сервер должен отдать
+["follow", "bring", "bunch", "question"] - слова в слайсе в любом порядке.
+
+Приложение должно отсеивать часто употребляемые слова типа of/a/the/, местоимения
+и глагольные частицы (will).
+
+Для нормализации необходимо использовать библиотеку
+[snowball](https://github.com/kljensen/snowball)
+
+Сервис должен возвращать gRPC ошибку при получении сообщения больше 4 KiB -
+[ResourceExhausted](https://pkg.go.dev/google.golang.org/grpc/codes#pkg-constants).
+
+Сервис должен собираться и запускаться через предоставленный compose файл,
+а также проходить интеграционные тесты - запуск специального тест контейнера.
+
+Для тестирования сервиса можно использовать [gRPC curl](https://github.com/fullstorydev/grpcurl)
+или [gRPC ui](https://github.com/fullstorydev/grpcui)
 
 ## Критерии приемки
 
-1. Микросервисы компилируются в docker image, запускаются через compose файл и проходят тесты.
-2. Используется только стандартная библиотека http.
-3. Серверы конфигурируются через cleanenv пакет и должны уметь запускаться как с config.yaml
-файлом через флаг -config, так и через переменные среды,
-в этом задании - HELLO_PORT и FILESERVER_PORT.
-4. Используется golang 1.25+
+1. Микросервис компилируeтся в docker image, запускаeтся через compose файл и проходит тесты.
+2. Используются библиотеки petname и snowball.
+3. Используется библиотека snowball, код логики нормализации находится
+в папке search-services/words/words.
+4. Сервер конфигурируeтся через cleanenv пакет и должeн уметь запускаться как с config.yaml файлом
+через флаг -config, так и через переменные среды,
+в этом задании - PETNAME_GRPC_PORT, WORDS_GRPC_PORT
+5. Используется golang 1.25+
 
 ## Материалы для ознакомления
 
-Git
-
-- [git-for-half-an-hour](https://proglib.io/p/git-for-half-an-hour)
-- [git-github-review](https://selectel.ru/blog/git-github-review/)
-
-Make
-
-- [makefiles-for-go-developers](https://tutorialedge.net/golang/makefiles-for-go-developers/)
-
-Compose
-
-- [gettingstarted](https://docs.docker.com/compose/gettingstarted/)
-
-Project layout
-
-- [flat-application-structure](https://www.calhoun.io/flat-application-structure/)
-
-REST
-
-- [rest-api](https://cloud.yandex.ru/ru/docs/glossary/rest-api)
-
-Старый способ сделать HTTP server
-
-- [rest_api_series](https://www.jetbrains.com/guide/go/tutorials/rest_api_series/stdlib/)
-
-1.22 HTTP в Go 1.22+
-
-- [spin-a-framework-free-http-router-server-in-go-122-with-ease-6nc](https://dev.to/prakash_chokalingam/spin-a-framework-free-http-router-server-in-go-122-with-ease-6nc)
-- [routing-enhancements](https://go.dev/blog/routing-enhancements)
-- [Улучшенная маршрутизация HTTP-серверов в Go 1.22](https://habr.com/ru/articles/768034/)
+- [Petname Generator](https://github.com/dustinkirkland/golang-petname)
+- [Quick start](https://grpc.io/docs/languages/go/quickstart/)
+- [Basics](https://grpc.io/docs/languages/go/basics/)
+- [Codes](https://pkg.go.dev/google.golang.org/grpc/codes)
+- [gRPC url](https://github.com/fullstorydev/grpcurl)
+- [gRPC UI](https://github.com/fullstorydev/grpcui)
+- [Как создавать модули](https://go.dev/doc/tutorial/create-module)
+- [Библиотека для нормализации](https://github.com/kljensen/snowball)
+- [Библиотека для нормализации, English + stopwords](https://github.com/kljensen/snowball/tree/master/english)
