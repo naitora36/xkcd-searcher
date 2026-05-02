@@ -16,3 +16,7 @@ type Updater interface {
 	Status(context.Context) (UpdateStatus, error)
 	Drop(context.Context) error
 }
+
+type Searcher interface {
+	Search(context.Context, string, int) ([]Comics, error)
+}

@@ -33,4 +33,5 @@ func TestPing(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&reply))
 	require.Equal(t, "ok", reply.Replies["words"], "no words running")
 	require.Equal(t, "ok", reply.Replies["update"], "no db running")
+	require.Equal(t, "ok", reply.Replies["search"], "no search running")
 }

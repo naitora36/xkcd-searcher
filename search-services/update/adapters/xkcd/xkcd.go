@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"yadro.com/course/closers"
@@ -25,6 +26,7 @@ type XKCDInfoDTO struct {
 	URL         string `json:"img"`
 	Title       string `json:"title"`
 	Description string `json:"transcript"`
+	Alt         string `json:"alt"`
 }
 
 func NewClient(url string, timeout time.Duration, log *slog.Logger) (*Client, error) {
@@ -39,15 +41,6 @@ func NewClient(url string, timeout time.Duration, log *slog.Logger) (*Client, er
 }
 
 func (c Client) Get(ctx context.Context, id int) (core.XKCDInfo, error) {
-	if id == 404 {
-		return core.XKCDInfo{
-			ID:          id,
-			URL:         "https://empty_and_funny",
-			Title:       "",
-			Description: "",
-		}, nil
-	}
-
 	res := XKCDInfoDTO{}
 
 	stringId := strconv.Itoa(id)
@@ -68,6 +61,10 @@ func (c Client) Get(ctx context.Context, id int) (core.XKCDInfo, error) {
 
 	defer closers.CloseOrLog(resp.Body, slog.Default())
 
+	if resp.StatusCode == http.StatusNotFound {
+		return core.XKCDInfo{}, core.ErrNotFound
+	}
+
 	err = json.NewDecoder(resp.Body).Decode(&res)
 	if err != nil {
 		return core.XKCDInfo{}, err
@@ -76,8 +73,7 @@ func (c Client) Get(ctx context.Context, id int) (core.XKCDInfo, error) {
 	return core.XKCDInfo{
 		ID:          res.ID,
 		URL:         res.URL,
-		Title:       res.Title,
-		Description: res.Description,
+		Description: strings.Join([]string{res.Title, res.Description, res.Alt}, " "),
 	}, nil
 }
 

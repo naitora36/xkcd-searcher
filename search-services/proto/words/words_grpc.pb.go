@@ -27,8 +27,11 @@ const (
 // WordsClient is the client API for Words service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Service
 type WordsClient interface {
 	Ping(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// Send name, receive greeting
 	Norm(ctx context.Context, in *WordsRequest, opts ...grpc.CallOption) (*WordsReply, error)
 }
 
@@ -63,8 +66,11 @@ func (c *wordsClient) Norm(ctx context.Context, in *WordsRequest, opts ...grpc.C
 // WordsServer is the server API for Words service.
 // All implementations must embed UnimplementedWordsServer
 // for forward compatibility.
+//
+// Service
 type WordsServer interface {
 	Ping(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	// Send name, receive greeting
 	Norm(context.Context, *WordsRequest) (*WordsReply, error)
 	mustEmbedUnimplementedWordsServer()
 }

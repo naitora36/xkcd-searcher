@@ -11,6 +11,7 @@ import (
 	"os/signal"
 
 	"yadro.com/course/api/adapters/rest"
+	"yadro.com/course/api/adapters/search"
 	"yadro.com/course/api/adapters/update"
 	"yadro.com/course/api/adapters/words"
 	"yadro.com/course/api/config"
@@ -48,14 +49,20 @@ func run(cfg *config.Config, log *slog.Logger) error {
 	}
 	defer closers.CloseOrLog(wordsClient.Conn, log)
 
+	searchClient, err := search.NewClient(cfg.SearchAddress, log)
+	if err != nil {
+		return fmt.Errorf("cannot init words adapter: %w", err)
+	}
+	defer closers.CloseOrLog(searchClient.Conn, log)
+
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/words", rest.NewWordsHandler(log, wordsClient))
-	mux.Handle("GET /api/ping", rest.NewPingHandler(log, map[string]core.Pinger{"words": wordsClient, "update": updateClient}))
+	mux.Handle("GET /api/ping", rest.NewPingHandler(log, map[string]core.Pinger{"words": wordsClient, "update": updateClient, "search": searchClient}))
 	mux.Handle("POST /api/db/update", rest.NewUpdateHandler(log, updateClient))
 	mux.Handle("GET /api/db/stats", rest.NewUpdateStatsHandler(log, updateClient))
 	mux.Handle("GET /api/db/status", rest.NewUpdateStatusHandler(log, updateClient))
 	mux.Handle("DELETE /api/db", rest.NewDropHandler(log, updateClient))
-
+	mux.Handle("GET /api/search", rest.NewSearchHandler(log, searchClient))
 	server := http.Server{
 		Addr:        cfg.HTTPConfig.Address,
 		ReadTimeout: cfg.HTTPConfig.Timeout,

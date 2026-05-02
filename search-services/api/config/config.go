@@ -17,6 +17,7 @@ type Config struct {
 	HTTPConfig    HTTPConfig `yaml:"api_server"`
 	WordsAddress  string     `yaml:"words_address" env:"WORDS_ADDRESS" env-default:"words:81"`
 	UpdateAddress string     `yaml:"update_address" env:"UPDATE_ADDRESS" env-default:"update:82"`
+	SearchAddress string     `yaml:"search_address" env:"SEARCH_ADDRESS" env-default:"search:83"`
 }
 
 func MustLoad(configPath string) Config {

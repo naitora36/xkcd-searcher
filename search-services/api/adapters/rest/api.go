@@ -7,13 +7,18 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"yadro.com/course/api/core"
 )
 
-const phraseKey = "phrase"
+const (
+	phraseKey     = "phrase"
+	limitKey      = "limit"
+	standartLimit = 10
+)
 
 type PingResponse struct {
 	Replies map[string]string `json:"replies"`
@@ -27,6 +32,10 @@ type UpdateStatsDto struct {
 	WordsUnique   int `json:"words_unique"`
 	ComicsFetched int `json:"comics_fetched"`
 	ComicsTotal   int `json:"comics_total"`
+}
+type SearchResponse struct {
+	Comics []core.Comics `json:"comics"`
+	Total  int           `json:"total"`
 }
 
 func NewPingHandler(log *slog.Logger, pingers map[string]core.Pinger) http.HandlerFunc {
@@ -105,30 +114,25 @@ func NewUpdateHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		err := updater.Update(ctx)
-		if err == nil {
+		switch err := updater.Update(ctx); err {
+		case nil:
 			w.WriteHeader(http.StatusOK)
-
 			_, err = fmt.Fprintln(w, "the update was successful")
 			if err != nil {
 				log.Error("sending response error", "error", err)
-				return
 			}
-			return
-		}
 
-		if errors.Is(err, core.ErrAlreadyRunning) {
+		case core.ErrAlreadyRunning:
 			w.WriteHeader(http.StatusAccepted)
 			_, err := fmt.Fprintln(w, "update request has already been sent")
 			if err != nil {
 				log.Error("sending response error", "error", err)
-				return
 			}
-			return
-		}
 
-		log.Error("update failed", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		default:
+			log.Error("update failed", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -157,6 +161,7 @@ func NewUpdateStatsHandler(log *slog.Logger, updater core.Updater) http.HandlerF
 func NewUpdateStatusHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+
 		status, err := updater.Status(ctx)
 		if err != nil {
 			log.Error("fatal error when get status", "error", err)
@@ -176,24 +181,62 @@ func NewUpdateStatusHandler(log *slog.Logger, updater core.Updater) http.Handler
 func NewDropHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		err := updater.Drop(ctx)
-		if err == nil {
+
+		switch err := updater.Drop(ctx); err {
+		case nil:
 			w.WriteHeader(http.StatusOK)
 
 			_, err := fmt.Fprintln(w, "the drop table was successful")
 			if err != nil {
 				log.Error("sending response error", "error", err)
+			}
+
+		case core.ErrAlreadyRunning:
+			http.Error(w, "service is busy with another operation", http.StatusConflict)
+
+		default:
+			log.Error("fatal error when drop table", "error", err)
+			http.Error(w, core.ErrInternal.Error(), http.StatusInternalServerError)
+		}
+	}
+}
+
+func NewSearchHandler(log *slog.Logger, search core.Searcher) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limit := standartLimit
+
+		queryValues := r.URL.Query()
+
+		limitString := queryValues.Get(limitKey)
+		if limitString != "" {
+			val, err := strconv.Atoi(limitString)
+			if err != nil {
+				http.Error(w, "wrong limit value, it must be a integer value bigger than zero", http.StatusBadRequest)
+				log.Warn("error when convert limit to int", "limit_string", limitString, "error", err)
 				return
 			}
+			limit = val
+		}
+
+		phrase := queryValues.Get(phraseKey)
+		if phrase == "" {
+			http.Error(w, "phrase cannot be empty", http.StatusBadRequest)
 			return
 		}
 
-		if errors.Is(err, core.ErrAlreadyRunning) {
-			http.Error(w, "service is busy with another operation", http.StatusConflict)
+		comics, err := search.Search(r.Context(), phrase, limit)
+		if err != nil {
+			http.Error(w, core.ErrInternal.Error(), http.StatusInternalServerError)
+			log.Error("fatal error when make search request", "error", err)
 			return
 		}
-		log.Error("fatal error when drop table", "error", err)
-		http.Error(w, core.ErrInternal.Error(), http.StatusInternalServerError)
+
+		res := SearchResponse{
+			Comics: comics,
+			Total:  len(comics),
+		}
+
+		sendJSON(w, log, &res)
 	}
 }
 

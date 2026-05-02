@@ -27,7 +27,7 @@ const (
 )
 
 type config struct {
-	Port           string        `yaml:"port" env:"WORDS_GRPC_PORT" env-default:"8080"`
+	Addr           string        `yaml:"words_address" env:"WORDS_ADDRESS" env-default:"localhost:80"`
 	ShutdownPeriod time.Duration `yaml:"shutdown_period" env:"WORDS_GRPC_SHUTDOWN_PERIOD" env-default:"10s"`
 }
 
@@ -36,20 +36,11 @@ func getConfig() (config, error) {
 
 	var configPath string
 
-	flag.StringVar(&configPath, "config", "", "path to config file")
+	flag.StringVar(&configPath, "config", "config.yaml", "path to config file")
 	flag.Parse()
 
-	if configPath != "" {
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			return config{}, fmt.Errorf("config file not found: %v", configPath)
-		}
-		if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
-			return config{}, fmt.Errorf("failed to read config: %w", err)
-		}
-	} else {
-		if err := cleanenv.ReadEnv(&cfg); err != nil {
-			return config{}, fmt.Errorf("failed to read env: %w", err)
-		}
+	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+		return config{}, err
 	}
 
 	return cfg, nil
@@ -108,9 +99,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	addr := ":" + cfg.Port
-
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}

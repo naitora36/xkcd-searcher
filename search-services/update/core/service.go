@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -10,6 +11,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 )
+
+const maxLenDescription = 3000
 
 type Service struct {
 	log         *slog.Logger
@@ -33,6 +36,7 @@ func NewService(log *slog.Logger, db DB, xkcd XKCD, words Words, concurrency int
 	}, nil
 }
 
+// Попробовал чуть подразбить логику на более мелкие функции, не знаю насколько удачно получилось...
 func (s *Service) Update(ctx context.Context) (err error) {
 	if !s.updating.CompareAndSwap(false, true) {
 		return ErrAlreadyRunning
@@ -60,6 +64,9 @@ func (s *Service) Update(ctx context.Context) (err error) {
 	go func() {
 		defer close(in)
 		for i := 1; i <= numOfComics; i++ {
+			if _, ok := existIds[i]; ok {
+				continue
+			}
 			select {
 			case <-gCtx.Done():
 				return
@@ -70,37 +77,13 @@ func (s *Service) Update(ctx context.Context) (err error) {
 
 	for w := 1; w <= s.concurrency; w++ {
 		g.Go(func() error {
-			for x := range in {
-				if _, ok := existIds[x]; ok {
-					continue
-				}
-
-				comicsInfo, err := s.fetchWithRetry(gCtx, x)
+			for id := range in {
+				err := s.processOne(gCtx, id)
 				if err != nil {
-					s.log.Warn("skipping comic due to fetch error", "id", x, "error", err)
-					continue
-				}
-
-				info := comicsInfo.Title + " " + comicsInfo.Description
-				// Довольно таки грубо обрезал, лучше бы конечно это как-то более аккуратно по словам обрезать, но пока так
-				if len(info) > 2550 {
-					info = info[:2550]
-				}
-				words, err := s.words.Norm(gCtx, info)
-				if err != nil {
-					s.log.Warn("skipping comic due to normalize error", "id", x, "error", err)
-					continue
-				}
-
-				comics := Comics{
-					ID:    comicsInfo.ID,
-					URL:   comicsInfo.URL,
-					Words: words,
-				}
-
-				err = s.db.Add(gCtx, comics)
-				if err != nil {
-					return fmt.Errorf("db add comics error: %w", err)
+					if errors.Is(err, ErrSkipped) {
+						continue
+					}
+					return err
 				}
 			}
 			return nil
@@ -111,6 +94,110 @@ func (s *Service) Update(ctx context.Context) (err error) {
 		return err
 	}
 	return nil
+}
+
+func (s *Service) processOne(ctx context.Context, id int) error {
+	comicsInfo, err := s.fetchWithRetry(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			err = s.addEmptyComics(ctx, id)
+			if err != nil {
+				return err
+			}
+			return ErrSkipped
+		}
+		s.log.Warn("skipping comic due to fetch error", "id", id, "error", err)
+		return ErrSkipped
+	}
+
+	info := limitWords(comicsInfo.Description, maxLenDescription)
+
+	words, err := s.words.Norm(ctx, info)
+	if err != nil {
+		s.log.Warn("skipping comic due to normalize error", "id", id, "error", err)
+		return ErrSkipped
+	}
+
+	comics := Comics{
+		ID:    comicsInfo.ID,
+		URL:   comicsInfo.URL,
+		Words: words,
+	}
+
+	err = s.db.Add(ctx, comics)
+	if err != nil {
+		return fmt.Errorf("db add comics error: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) fetchWithRetry(ctx context.Context, id int) (XKCDInfo, error) {
+	baseDelay := 500 * time.Millisecond
+	maxAttempts := 3
+
+	var lastErr error
+	for attempt := range maxAttempts {
+		info, err := s.xkcd.Get(ctx, id)
+		if err == nil {
+			return info, nil
+		}
+
+		lastErr = err
+		s.log.Warn("fetch failed, retrying", "id", id, "attempt", attempt+1, "error", err)
+
+		if attempt == maxAttempts-1 {
+			break
+		}
+
+		delay := baseDelay * (1 << attempt)
+		jitter := rand.N(delay / 2)
+
+		select {
+		case <-time.After(delay + jitter):
+		case <-ctx.Done():
+			return XKCDInfo{}, ctx.Err()
+		}
+	}
+
+	return XKCDInfo{}, fmt.Errorf("all attempts failed: %w", lastErr)
+}
+
+func (s *Service) addEmptyComics(ctx context.Context, id int) error {
+	emptyComics := Comics{
+		ID:    id,
+		URL:   "http://empty_comics",
+		Words: []string{},
+	}
+
+	err := s.db.Add(ctx, emptyComics)
+	if err != nil {
+		return fmt.Errorf("db add comics error: %w", err)
+	}
+	return nil
+}
+
+func limitWords(description string, maxLen int) string {
+	runes := []rune(description)
+
+	if len(runes) <= maxLen {
+		return description
+	}
+
+	truncated := runes[:maxLen]
+
+	lastSpace := -1
+	for i := len(truncated) - 1; i >= 0; i-- {
+		if truncated[i] == ' ' {
+			lastSpace = i
+			break
+		}
+	}
+
+	if lastSpace > 0 {
+		return string(truncated[:lastSpace])
+	}
+
+	return string(truncated)
 }
 
 func (s *Service) Stats(ctx context.Context) (ServiceStats, error) {
@@ -145,35 +232,4 @@ func (s *Service) Drop(ctx context.Context) error {
 	defer s.updating.Store(false)
 
 	return s.db.Drop(ctx)
-}
-
-func (s *Service) fetchWithRetry(ctx context.Context, id int) (XKCDInfo, error) {
-	baseDelay := 500 * time.Millisecond
-	maxAttempts := 3
-
-	var lastErr error
-	for attempt := range maxAttempts {
-		info, err := s.xkcd.Get(ctx, id)
-		if err == nil {
-			return info, nil
-		}
-
-		lastErr = err
-		s.log.Warn("fetch failed, retrying", "id", id, "attempt", attempt+1, "error", err)
-
-		if attempt == maxAttempts-1 {
-			break
-		}
-
-		delay := baseDelay * (1 << attempt)
-		jitter := rand.N(delay / 2)
-
-		select {
-		case <-time.After(delay + jitter):
-		case <-ctx.Done():
-			return XKCDInfo{}, ctx.Err()
-		}
-	}
-
-	return XKCDInfo{}, fmt.Errorf("all attempts failed: %w", lastErr)
 }

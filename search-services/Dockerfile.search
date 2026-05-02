@@ -7,20 +7,20 @@ ENV PATH="$PATH:$(go env GOPATH)/bin"
 
 COPY go.mod go.sum /src/
 COPY proto /src/proto
-COPY api /src/api
+COPY search /src/search
 COPY closers /src/closers
 
 RUN cd /src && \
     protoc --go_out=.      --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    proto/words/words.proto
+    proto/search/search.proto
 
 
 ENV CGO_ENABLED=0
-RUN cd /src && go build -o /api api/main.go
+RUN cd /src && go build -o /search search/main.go
 
 FROM alpine:3.20
 
-COPY --from=build /api /api
+COPY --from=build /search /search
 
-ENTRYPOINT [ "/api" ]
+ENTRYPOINT [ "/search" ]

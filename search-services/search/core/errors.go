@@ -12,5 +12,4 @@ var (
 	ErrDeadlineExceeded  = errors.New("deadline is exceeded")
 	ErrCanceled          = errors.New("context is canceled")
 	ErrAlreadyRunning    = errors.New("already run")
-	ErrSkipped           = errors.New("just skipped")
 )

@@ -14,3 +14,8 @@ type UpdateStats struct {
 	ComicsFetched int
 	ComicsTotal   int
 }
+
+type Comics struct {
+	ID  int
+	URL string
+}
