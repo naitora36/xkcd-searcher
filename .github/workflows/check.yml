@@ -40,7 +40,7 @@ jobs:
 
       - name: Build
         run: |
-          cd sneakers-services
+          cd search-services
           go build ./...
   test:
     needs: build
@@ -58,10 +58,19 @@ jobs:
         with:
           go-version: ${{matrix.version}}
           cache: true 
+      - name: Run Unit Tests
+        run: make unit
 
-      - name: Test
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v5
+        if: always() 
+        with:
+          name: coverage-report-go-${{matrix.version}}
+          path: cover.html
+
+      - name: Integration Test
         run: make test
-
+          
       - name: Dump docker logs on failure
         if: failure()
         run: docker compose logs
