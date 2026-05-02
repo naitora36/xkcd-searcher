@@ -9,3 +9,10 @@ type Normalizer interface {
 type Pinger interface {
 	Ping(context.Context) error
 }
+
+type Updater interface {
+	Update(context.Context) error
+	Stats(context.Context) (UpdateStats, error)
+	Status(context.Context) (UpdateStatus, error)
+	Drop(context.Context) error
+}

@@ -8,6 +8,8 @@ ENV PATH="$PATH:$(go env GOPATH)/bin"
 COPY go.mod go.sum /src/
 COPY proto /src/proto
 COPY api /src/api
+COPY closers /src/closers
+
 
 RUN cd /src && \
     protoc --go_out=.      --go_opt=paths=source_relative \

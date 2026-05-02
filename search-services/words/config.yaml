@@ -1,2 +1,1 @@
-port: 8080
-shutdown_period: 10s
+words_address: localhost:80

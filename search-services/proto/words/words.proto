@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package search;
+package words;
 
 import "google/protobuf/empty.proto";
 
@@ -14,10 +14,8 @@ message WordsReply {
   repeated string words = 1;
 }
 
-// Service
+
 service Words {
   rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-
-  // Send name, receive greeting
   rpc Norm(WordsRequest) returns (WordsReply) {}
 }

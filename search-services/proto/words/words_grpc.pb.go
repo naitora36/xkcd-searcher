@@ -20,18 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Words_Ping_FullMethodName = "/search.Words/Ping"
-	Words_Norm_FullMethodName = "/search.Words/Norm"
+	Words_Ping_FullMethodName = "/words.Words/Ping"
+	Words_Norm_FullMethodName = "/words.Words/Norm"
 )
 
 // WordsClient is the client API for Words service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// Service
 type WordsClient interface {
 	Ping(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// Send name, receive greeting
 	Norm(ctx context.Context, in *WordsRequest, opts ...grpc.CallOption) (*WordsReply, error)
 }
 
@@ -66,11 +63,8 @@ func (c *wordsClient) Norm(ctx context.Context, in *WordsRequest, opts ...grpc.C
 // WordsServer is the server API for Words service.
 // All implementations must embed UnimplementedWordsServer
 // for forward compatibility.
-//
-// Service
 type WordsServer interface {
 	Ping(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	// Send name, receive greeting
 	Norm(context.Context, *WordsRequest) (*WordsReply, error)
 	mustEmbedUnimplementedWordsServer()
 }
@@ -149,7 +143,7 @@ func _Words_Norm_Handler(srv interface{}, ctx context.Context, dec func(interfac
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Words_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "search.Words",
+	ServiceName: "words.Words",
 	HandlerType: (*WordsServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

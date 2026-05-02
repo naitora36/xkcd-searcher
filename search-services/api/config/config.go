@@ -1,35 +1,28 @@
 package config
 
 import (
-	"fmt"
+	"log"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
+type HTTPConfig struct {
+	Address string        `yaml:"address" env:"API_ADDRESS" env-default:"localhost:80"`
+	Timeout time.Duration `yaml:"timeout" env:"API_TIMEOUT" env-default:"5s"`
+}
+
 type Config struct {
-	HTTPServer   HTTPServerConfig `yaml:"http_server"`
-	LogLevel     string           `yaml:"log_level" env:"LOG_LEVEL" env-default:"DEBUG"`
-	WordsAddress string           `yaml:"words_address" env:"WORDS_ADDRESS" env-default:"localhost:8080"`
-}
-type HTTPServerConfig struct {
-	Address        string        `yaml:"address" env:"HTTP_SERVER_ADDRESS" env-default:"localhost:8888"`
-	ReadTimeout    time.Duration `yaml:"timeout" env:"HTTP_SERVER_TIMEOUT" env-default:"30s"`
-	ShutdownPeriod time.Duration `yaml:"shutdown_period" env:"HTTP_SHUTDOWN_PERIOD" env-default:"30s"`
+	LogLevel      string     `yaml:"log_level" env:"LOG_LEVEL" env-default:"DEBUG"`
+	HTTPConfig    HTTPConfig `yaml:"api_server"`
+	WordsAddress  string     `yaml:"words_address" env:"WORDS_ADDRESS" env-default:"words:81"`
+	UpdateAddress string     `yaml:"update_address" env:"UPDATE_ADDRESS" env-default:"update:82"`
 }
 
-func LoadConfig(configPath string) (Config, error) {
+func MustLoad(configPath string) Config {
 	var cfg Config
-
-	if configPath != "" {
-		if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
-			return Config{}, fmt.Errorf("failed to read config: %w", err)
-		}
-	} else {
-		if err := cleanenv.ReadEnv(&cfg); err != nil {
-			return Config{}, fmt.Errorf("failed to read env: %w", err)
-		}
+	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+		log.Fatalf("cannot read config %q: %s", configPath, err)
 	}
-
-	return cfg, nil
+	return cfg
 }

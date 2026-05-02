@@ -8,14 +8,18 @@ up:
 down:
 	${container_runtime} compose down
 
+clean:
+	${container_runtime} compose down -v
+
 run-tests: 
 	${container_runtime} run --rm --network=host tests:latest
 
 test:
-	make down
+	make clean
 	make up
+	@echo wait cluster to start && sleep 10
 	make run-tests
-	make down
+	make clean
 	@echo "test finished"
 
 lint:

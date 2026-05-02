@@ -4,99 +4,97 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
 
 	"yadro.com/course/api/adapters/rest"
+	"yadro.com/course/api/adapters/update"
 	"yadro.com/course/api/adapters/words"
 	"yadro.com/course/api/config"
 	"yadro.com/course/api/core"
+	"yadro.com/course/closers"
 )
 
 func main() {
 	var configPath string
-
 	flag.StringVar(&configPath, "config", "config.yaml", "server configuration file")
 	flag.Parse()
 
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		slog.Error("error when read config", "error", err)
-		os.Exit(1)
-	}
+	cfg := config.MustLoad(configPath)
+	log := mustMakeLogger(cfg.LogLevel)
 
-	log, err := makeLogger(cfg.LogLevel)
-	if err != nil {
-		slog.Error("failed to make logger", "error", err)
+	if err := run(&cfg, log); err != nil {
+		log.Error("server stopped with error", "error", err)
 		os.Exit(1)
 	}
+}
+
+func run(cfg *config.Config, log *slog.Logger) error {
+	log.Info("starting server")
+	log.Debug("debug messages are enabled")
+
+	updateClient, err := update.NewClient(cfg.UpdateAddress, log)
+	if err != nil {
+		return fmt.Errorf("cannot init update adapter: %w", err)
+	}
+	defer closers.CloseOrLog(updateClient.Conn, log)
 
 	wordsClient, err := words.NewClient(cfg.WordsAddress, log)
 	if err != nil {
-		log.Error("cannot init words adapter", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("cannot init words adapter: %w", err)
 	}
-	defer func() {
-		err := wordsClient.Close()
-		if err != nil {
-			log.Error("close client error", "error", err)
-		}
-	}()
+	defer closers.CloseOrLog(wordsClient.Conn, log)
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/words", rest.NewWordsHandler(log, wordsClient))
-	mux.Handle("GET /ping", rest.NewPingHandler(log, map[string]core.Pinger{"words": wordsClient}))
+	mux.Handle("GET /api/ping", rest.NewPingHandler(log, map[string]core.Pinger{"words": wordsClient, "update": updateClient}))
+	mux.Handle("POST /api/db/update", rest.NewUpdateHandler(log, updateClient))
+	mux.Handle("GET /api/db/stats", rest.NewUpdateStatsHandler(log, updateClient))
+	mux.Handle("GET /api/db/status", rest.NewUpdateStatusHandler(log, updateClient))
+	mux.Handle("DELETE /api/db", rest.NewDropHandler(log, updateClient))
 
 	server := http.Server{
-		Addr:        cfg.HTTPServer.Address,
-		ReadTimeout: cfg.HTTPServer.ReadTimeout,
+		Addr:        cfg.HTTPConfig.Address,
+		ReadTimeout: cfg.HTTPConfig.Timeout,
 		Handler:     mux,
 	}
 
-	serverDone := make(chan struct{})
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	go func() {
 		<-ctx.Done()
-
-		log.Info("shutting down http server...")
-
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTPServer.ShutdownPeriod)
-		defer cancel()
-
-		if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Debug("shutting down server")
+		if err := server.Shutdown(context.Background()); err != nil {
 			log.Error("erroneous shutdown", "error", err)
 		}
-
-		close(serverDone)
 	}()
 
+	log.Info("Running HTTP server", "address", cfg.HTTPConfig.Address)
 	if err := server.ListenAndServe(); err != nil {
 		if !errors.Is(err, http.ErrServerClosed) {
-			log.Error("server closed unexpectedly", "error", err)
-			return
+			return fmt.Errorf("server closed unexpectedly: %w", err)
 		}
 	}
-	<-serverDone
+
+	return nil
 }
 
-func makeLogger(logLevel string) (*slog.Logger, error) {
+func mustMakeLogger(logLevel string) *slog.Logger {
 	var level slog.Level
-
-	err := level.UnmarshalText([]byte(logLevel))
-	if err != nil {
-		return nil, err
+	switch logLevel {
+	case "DEBUG":
+		level = slog.LevelDebug
+	case "INFO":
+		level = slog.LevelInfo
+	case "ERROR":
+		level = slog.LevelError
+	default:
+		panic("unknown log level: " + logLevel)
 	}
-
-	opts := &slog.HandlerOptions{
-		Level: level,
-	}
-
-	handler := slog.NewTextHandler(os.Stdout, opts)
-
-	return slog.New(handler), nil
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	return slog.New(handler)
 }

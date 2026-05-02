@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -20,6 +21,12 @@ type PingResponse struct {
 type NormResponse struct {
 	Words []string `json:"words"`
 	Total int      `json:"total"`
+}
+type UpdateStatsDto struct {
+	WordsTotal    int `json:"words_total"`
+	WordsUnique   int `json:"words_unique"`
+	ComicsFetched int `json:"comics_fetched"`
+	ComicsTotal   int `json:"comics_total"`
 }
 
 func NewPingHandler(log *slog.Logger, pingers map[string]core.Pinger) http.HandlerFunc {
@@ -91,6 +98,102 @@ func NewWordsHandler(log *slog.Logger, normalizer core.Normalizer) http.HandlerF
 		}
 
 		sendJSON(w, log, result)
+	}
+}
+
+func NewUpdateHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		err := updater.Update(ctx)
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+
+			_, err = fmt.Fprintln(w, "the update was successful")
+			if err != nil {
+				log.Error("sending response error", "error", err)
+				return
+			}
+			return
+		}
+
+		if errors.Is(err, core.ErrAlreadyRunning) {
+			w.WriteHeader(http.StatusAccepted)
+			_, err := fmt.Fprintln(w, "update request has already been sent")
+			if err != nil {
+				log.Error("sending response error", "error", err)
+				return
+			}
+			return
+		}
+
+		log.Error("update failed", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+
+func NewUpdateStatsHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		stats, err := updater.Stats(ctx)
+		if err != nil {
+			log.Error("get stats error", "error", err.Error())
+			http.Error(w, core.ErrInternal.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		res := UpdateStatsDto{
+			WordsTotal:    stats.WordsTotal,
+			WordsUnique:   stats.WordsUnique,
+			ComicsFetched: stats.ComicsFetched,
+			ComicsTotal:   stats.ComicsTotal,
+		}
+
+		sendJSON(w, log, res)
+	}
+}
+
+func NewUpdateStatusHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		status, err := updater.Status(ctx)
+		if err != nil {
+			log.Error("fatal error when get status", "error", err)
+			http.Error(w, core.ErrInternal.Error(), http.StatusInternalServerError)
+			return
+		}
+		response := struct {
+			Status string `json:"status"`
+		}{
+			Status: string(status),
+		}
+
+		sendJSON(w, log, response)
+	}
+}
+
+func NewDropHandler(log *slog.Logger, updater core.Updater) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		err := updater.Drop(ctx)
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+
+			_, err := fmt.Fprintln(w, "the drop table was successful")
+			if err != nil {
+				log.Error("sending response error", "error", err)
+				return
+			}
+			return
+		}
+
+		if errors.Is(err, core.ErrAlreadyRunning) {
+			http.Error(w, "service is busy with another operation", http.StatusConflict)
+			return
+		}
+		log.Error("fatal error when drop table", "error", err)
+		http.Error(w, core.ErrInternal.Error(), http.StatusInternalServerError)
 	}
 }
 
