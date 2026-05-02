@@ -1,0 +1,7 @@
+log_level: DEBUG
+metrics_server_address: localhost:8086
+search_address: localhost:83
+words_address: localhost:82
+db_address: localhost:1234
+broker_address: nats://nats:4222
+index_timer: 24h
