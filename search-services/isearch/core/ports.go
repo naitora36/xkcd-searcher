@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=ports.go -destination=mocks/isearch_core.go
 type Searcher interface {
 	SearchIndex(ctx context.Context, in *SearchRequest) (*SearchReply, error)
 	BuildIndex(ctx context.Context) error

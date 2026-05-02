@@ -28,6 +28,13 @@ lint:
 proto:
 	make -C search-services protobuf
 
+unit:
+	make -C search-services test
+	mv search-services/cover.html .
+fmt: 
+	make -C search-services fmt
+mockgen:
+	make -C search-services mockgen
 tools:
 	go install github.com/yoheimuta/protolint/cmd/protolint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
@@ -37,3 +44,4 @@ tools:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $$(go env GOPATH)/bin v2.4.0
 	@echo "checking protobuf compiler, if it fails follow guide at https://protobuf.dev/installation/"
 	@which -s protoc && echo OK || exit 1
+

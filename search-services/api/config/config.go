@@ -16,6 +16,7 @@ type Config struct {
 	LogLevel          string        `yaml:"log_level" env:"LOG_LEVEL" env-default:"DEBUG"`
 	SearchConcurrency int           `yaml:"search_concurrency" env:"SEARCH_CONCURRENCY" env-default:"1"`
 	SearchRate        int           `yaml:"search_rate" env:"SEARCH_RATE" env-default:"1"`
+	RateTimeoutQueue  time.Duration `yaml:"rate_timeout_queue" env:"RATE_TIMEOUT_QUEUE" env-default:"30s"`
 	HTTPConfig        HTTPConfig    `yaml:"api_server"`
 	WordsAddress      string        `yaml:"words_address" env:"WORDS_ADDRESS" env-default:"words:81"`
 	UpdateAddress     string        `yaml:"update_address" env:"UPDATE_ADDRESS" env-default:"update:82"`

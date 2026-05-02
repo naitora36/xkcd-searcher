@@ -79,7 +79,7 @@ func run(cfg *config.Config, log *slog.Logger) error {
 	mux.Handle("GET /api/db/status", rest.NewUpdateStatusHandler(log, updateClient))
 	mux.Handle("DELETE /api/db", middleware.Auth(rest.NewDropHandler(log, updateClient), aaa))
 	mux.Handle("GET /api/search", middleware.Concurrency(rest.NewSearchHandler(log, searchClient), cfg.SearchConcurrency))
-	mux.Handle("GET /api/isearch", middleware.Rate(rest.NewSearchIndexHandler(log, isearchClient), cfg.SearchRate))
+	mux.Handle("GET /api/isearch", middleware.Rate(rest.NewSearchIndexHandler(log, isearchClient), cfg.SearchRate, cfg.RateTimeoutQueue))
 	mux.Handle("POST /api/login", rest.NewLoginHandler(log, aaa))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()

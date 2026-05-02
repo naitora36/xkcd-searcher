@@ -1,6 +1,7 @@
 log_level: DEBUG
 search_concurrency: 1
 search_rate: 1
+rate_timeout_queue: 30s
 token_ttl: 1m
 words_address: localhost:81
 update_address: localhost:82

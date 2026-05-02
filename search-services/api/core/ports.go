@@ -2,6 +2,8 @@ package core
 
 import "context"
 
+//go:generate mockgen -source=ports.go -destination=mocks/core.go
+
 type Normalizer interface {
 	Norm(context.Context, string) ([]string, error)
 }

@@ -10,6 +10,8 @@ const (
 	TokenPrefix      = "Token "
 )
 
+//go:generate mockgen -source=auth.go -destination=mocks/token_verifier.go
+
 type TokenVerifier interface {
 	Verify(token string) error
 }

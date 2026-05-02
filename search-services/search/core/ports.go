@@ -2,6 +2,7 @@ package core
 
 import "context"
 
+//go:generate mockgen -source=ports.go -destination=mocks/search_core.go
 type Searcher interface {
 	Search(context.Context, *SearchRequest) (*SearchReply, error)
 }

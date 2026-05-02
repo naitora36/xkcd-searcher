@@ -8,12 +8,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func Rate(next http.HandlerFunc, rps int) http.HandlerFunc {
+func Rate(next http.HandlerFunc, rps int, timeoutQueue time.Duration) http.HandlerFunc {
 	burst := rps - ((rps * 25) / 100)
 
 	limiter := rate.NewLimiter(rate.Limit(rps), burst)
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), timeoutQueue)
 		defer cancel()
 
 		if err := limiter.Wait(ctx); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=ports.go -destination=mocks/search_core.go
 type Updater interface {
 	Update(context.Context) error
 	Stats(context.Context) (ServiceStats, error)

@@ -95,6 +95,7 @@ func NewPingHandler(log *slog.Logger, pingers map[string]core.Pinger) http.Handl
 	}
 }
 
+//go:generate mockgen -source=api.go -destination=mocks/mock.go
 type Authenticator interface {
 	Login(user, password string) (string, error)
 }
@@ -253,9 +254,9 @@ func NewSearchHandler(log *slog.Logger, search core.Searcher) http.HandlerFunc {
 		limitString := queryValues.Get(limitKey)
 		if limitString != "" {
 			val, err := strconv.Atoi(limitString)
-			if err != nil {
+			if err != nil || val < 0 {
 				http.Error(w, "wrong limit value, it must be a integer value bigger than zero", http.StatusBadRequest)
-				log.Warn("error when convert limit to int", "limit_string", limitString, "error", err)
+				log.Warn("error when convert limit to int or limit less than zero", "limit_string", limitString, "error", err)
 				return
 			}
 			limit = val
@@ -292,9 +293,9 @@ func NewSearchIndexHandler(log *slog.Logger, isearch core.ISearcher) http.Handle
 		limitString := queryValues.Get(limitKey)
 		if limitString != "" {
 			val, err := strconv.Atoi(limitString)
-			if err != nil {
+			if err != nil || val < 0 {
 				http.Error(w, "wrong limit value, it must be a integer value bigger than zero", http.StatusBadRequest)
-				log.Warn("error when convert limit to int", "limit_string", limitString, "error", err)
+				log.Warn("error when convert limit to int or limit less than zero", "limit_string", limitString, "error", err)
 				return
 			}
 			limit = val

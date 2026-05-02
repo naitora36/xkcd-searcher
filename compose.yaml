@@ -22,6 +22,7 @@ services:
       - ISEARCH_ADDRESS=isearch:8080
       - SEARCH_CONCURRENCY=10
       - SEARCH_RATE=100
+      - RATE_TIMEOUT_QUEUE=30s
     depends_on:
       - words
       - update
