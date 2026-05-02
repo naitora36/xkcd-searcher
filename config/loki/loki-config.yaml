@@ -1,0 +1,45 @@
+auth_enabled: false    # аутентификация не нужна
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:            # Храним на диске
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1    # Один инстанс — репликация не нужна
+  ring:
+    kvstore:
+      store: inmemory      # Координация в памяти — один инстанс
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100   # Кэш запросов — ускоряет повторные запросы в Grafana
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb           # TSDB-хранилище для индексов
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h         # Новый индекс каждые 24 часа
+
+limits_config:
+  retention_period: 168h    # 7 дней — компромисс между историей и диском
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m       # Сжимаем данные каждые 10 минут
+  retention_enabled: true        # Включаем автоудаление старых логов
+  retention_delete_delay: 2h     # Удаляем не сразу. Страховка от случайного удаления
+  retention_delete_worker_count: 150
+  delete_request_store: filesystem

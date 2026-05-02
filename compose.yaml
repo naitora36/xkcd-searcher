@@ -90,7 +90,6 @@ services:
       words:
         condition: service_started
       
-
   isearch:
     image: isearch:latest
     build:
@@ -164,6 +163,7 @@ services:
       - "4222:4222"
       - "8222:8222" 
     command: "-m 8222"
+
   nats-exporter:
     image: natsio/prometheus-nats-exporter:latest
     ports:
@@ -174,6 +174,7 @@ services:
       - "http://nats:8222" 
     depends_on:
       - nats
+
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.125.0
     container_name: victoriametrics
@@ -191,16 +192,47 @@ services:
   grafana:
     image: grafana/grafana:12.2.0
     container_name: grafana
-    depends_on:
-      - "victoriametrics"
     ports:
       - 3000:3000
     volumes:
       - grafanadata:/var/lib/grafana
     restart: unless-stopped
+    depends_on:
+      - victoriametrics
+      - loki
 
+  loki:
+    image: grafana/loki:3.0.0            
+    container_name: loki
+    restart: unless-stopped               
+    mem_limit: 256m                       
+    mem_reservation: 128m                 
+    volumes:
+      - ./config/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro  
+      - loki_data:/loki                   
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:                         
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: promtail
+    restart: unless-stopped
+    mem_limit: 64m                        
+    mem_reservation: 32m
+    volumes:
+      - ./config/promtail/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro 
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      loki:
+        condition: service_healthy        
 volumes:
   postgres:
   pgadmin:
   vmdata:
   grafanadata:
+  loki_data:
