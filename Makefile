@@ -2,7 +2,7 @@ container_runtime := $(shell which podman || which docker)
 
 $(info using ${container_runtime})
 
-up: down
+up:
 	${container_runtime} compose up --build -d
 
 down:
@@ -19,14 +19,10 @@ test:
 	@echo "test finished"
 
 lint:
-	make -C petname lint
 	make -C search-services lint
 
 proto:
-	make -C petname protobuf
 	make -C search-services protobuf
-	cp petname/proto/* tests/proto/petname
-	cp search-services/proto/words/* tests/proto/words
 
 tools:
 	go install github.com/yoheimuta/protolint/cmd/protolint@latest

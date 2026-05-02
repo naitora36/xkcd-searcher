@@ -1,58 +1,54 @@
-package grpc_test
+package words_test
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
-	pb "yadro.com/tests/proto/words"
 )
 
-const wordsAddress = "localhost:28082"
+const address = "http://localhost:28080"
 
-func TestWordsPreflight(t *testing.T) {
+var client = http.Client{
+	Timeout: 10 * time.Second,
+}
+
+func TestPreflight(t *testing.T) {
 	require.Equal(t, true, true)
 }
 
-func TestGrpcWordsPing(t *testing.T) {
-	conn, err := grpc.NewClient(
-		wordsAddress, grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	require.NoError(t, err)
-	defer conn.Close()
-	c := pb.NewWordsClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err = c.Ping(ctx, &emptypb.Empty{})
-	require.NoError(t, err)
+type PingResponse struct {
+	Replies map[string]string `json:"replies"`
 }
 
-func TestGrpcWords(t *testing.T) {
-	conn, err := grpc.NewClient(
-		wordsAddress, grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	require.NoError(t, err)
-	defer conn.Close()
-	c := pb.NewWordsClient(conn)
+func TestPing(t *testing.T) {
+	resp, err := client.Get(address + "/ping")
+	require.NoError(t, err, "cannot ping")
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "wrong status")
+
+	var reply PingResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&reply))
+	require.Equal(t, "ok", reply.Replies["words"])
+}
+
+type WordsResponse struct {
+	Words []string `json:"words"`
+	Total int      `json:"total"`
+}
+
+func TestWords(t *testing.T) {
 
 	testCases := []struct {
 		desc     string
 		given    string
 		expected []string
 	}{
-		{
-			desc:     "empty",
-			given:    "",
-			expected: []string{},
-		},
 		{
 			desc:     "simple",
 			given:    "simple",
@@ -78,36 +74,56 @@ func TestGrpcWords(t *testing.T) {
 			given:    "Moscow!123'check-it'or   123, man,that,difficult:heck",
 			expected: []string{"moscow", "check", "123", "man", "difficult", "heck"},
 		},
+		{
+			desc:     "large",
+			given:    strings.Repeat("1234", 1<<10),
+			expected: []string{strings.Repeat("1234", 1<<10)},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			reply, err := c.Norm(ctx, &pb.WordsRequest{Phrase: tc.given})
+			query := url.Values{}
+			query.Add("phrase", tc.given)
+			req, err := http.NewRequestWithContext(
+				ctx, http.MethodGet, address+"/api/words?"+query.Encode(), nil)
 			require.NoError(t, err)
-			require.ElementsMatch(t, tc.expected, reply.GetWords())
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			var reply WordsResponse
+			require.NoError(t, json.NewDecoder(resp.Body).Decode(&reply))
+			require.ElementsMatch(t, tc.expected, reply.Words)
+			require.Equal(t, len(tc.expected), reply.Total)
 		})
 	}
 }
 
-func TestGrpcWordsTooLarge(t *testing.T) {
-	conn, err := grpc.NewClient(
-		wordsAddress, grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	require.NoError(t, err)
-	defer conn.Close()
-	c := pb.NewWordsClient(conn)
-
+func TestPhraseTooLarge(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	phrase := strings.Repeat("1234", 1<<10)
-	_, err = c.Norm(ctx, &pb.WordsRequest{Phrase: phrase})
+	query := url.Values{}
+	query.Add("phrase", "0"+strings.Repeat("1234", 1<<10))
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, address+"/api/words?"+query.Encode(), nil)
 	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
 
-	phrase += "0"
-	_, err = c.Norm(ctx, &pb.WordsRequest{Phrase: phrase})
-	require.Error(t, err)
-	require.Equal(t, codes.ResourceExhausted, status.Code(err))
+func TestPhraseMissing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx, http.MethodGet, address+"/api/words", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }

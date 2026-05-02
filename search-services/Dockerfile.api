@@ -7,7 +7,7 @@ ENV PATH="$PATH:$(go env GOPATH)/bin"
 
 COPY go.mod go.sum /src/
 COPY proto /src/proto
-COPY words /src/words
+COPY api /src/api
 
 RUN cd /src && \
     protoc --go_out=.      --go_opt=paths=source_relative \
@@ -16,10 +16,10 @@ RUN cd /src && \
 
 
 ENV CGO_ENABLED=0
-RUN cd /src && go build -o /words words/main.go
+RUN cd /src && go build -o /api api/main.go
 
 FROM alpine:3.20
 
-COPY --from=build /words /words
+COPY --from=build /api /api
 
-ENTRYPOINT [ "/words" ]
+ENTRYPOINT [ "/api" ]

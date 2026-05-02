@@ -1,0 +1,6 @@
+log_level: DEBUG
+words_address: localhost:8080
+http_server:
+  address: localhost:28080
+  timeout: 5s
+  shutdown_period: 25s
