@@ -22,7 +22,7 @@ type DBLightComicDto struct {
 }
 type DB struct {
 	log  *slog.Logger
-	conn *sqlx.DB
+	Conn *sqlx.DB
 }
 
 func New(log *slog.Logger, address string) (*DB, error) {
@@ -38,7 +38,7 @@ func New(log *slog.Logger, address string) (*DB, error) {
 
 	return &DB{
 		log:  log,
-		conn: db,
+		Conn: db,
 	}, nil
 }
 
@@ -47,7 +47,7 @@ func (db *DB) GetAllComics(ctx context.Context) ([]core.DBComic, error) {
 
 	query := `SELECT id, url, words FROM comics`
 
-	err := db.conn.SelectContext(ctx, &dbRes, query)
+	err := db.Conn.SelectContext(ctx, &dbRes, query)
 	if err != nil {
 		return nil, fmt.Errorf("db: %w", err)
 	}
@@ -77,9 +77,9 @@ func (db *DB) GetComicsByIDs(ctx context.Context, ids []int) ([]core.DBLightComi
 		return nil, fmt.Errorf("sqlx: %w", err)
 	}
 
-	query = db.conn.Rebind(query)
+	query = db.Conn.Rebind(query)
 
-	err = db.conn.SelectContext(ctx, &dbRes, query, args...)
+	err = db.Conn.SelectContext(ctx, &dbRes, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: %w", err)
 	}

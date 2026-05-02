@@ -12,7 +12,7 @@ import (
 
 type DB struct {
 	log  *slog.Logger
-	conn *sqlx.DB
+	Conn *sqlx.DB
 }
 
 func New(log *slog.Logger, address string) (*DB, error) {
@@ -24,7 +24,7 @@ func New(log *slog.Logger, address string) (*DB, error) {
 
 	return &DB{
 		log:  log,
-		conn: db,
+		Conn: db,
 	}, nil
 }
 
@@ -34,7 +34,7 @@ func (db *DB) Add(ctx context.Context, comics core.Comics) error {
 		VALUES ($1, $2, $3)
 		ON CONFLICT (id) DO NOTHING`
 
-	_, err := db.conn.Exec(query, comics.ID, comics.URL, comics.Words)
+	_, err := db.Conn.Exec(query, comics.ID, comics.URL, comics.Words)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (db *DB) Stats(ctx context.Context) (core.DBStats, error) {
             COALESCE(SUM(cardinality(words)), 0) 
         FROM comics`
 
-	err := db.conn.QueryRowxContext(ctx, countQuery).Scan(&stats.ComicsFetched, &stats.WordsTotal)
+	err := db.Conn.QueryRowxContext(ctx, countQuery).Scan(&stats.ComicsFetched, &stats.WordsTotal)
 	if err != nil {
 		return stats, err
 	}
@@ -62,7 +62,7 @@ func (db *DB) Stats(ctx context.Context) (core.DBStats, error) {
             FROM comics
         ) AS t`
 
-	err = db.conn.GetContext(ctx, &stats.WordsUnique, uniqueQuery)
+	err = db.Conn.GetContext(ctx, &stats.WordsUnique, uniqueQuery)
 
 	return stats, err
 }
@@ -70,14 +70,14 @@ func (db *DB) Stats(ctx context.Context) (core.DBStats, error) {
 func (db *DB) IDs(ctx context.Context) ([]int, error) {
 	var ids []int
 	query := `SELECT id FROM comics`
-	err := db.conn.SelectContext(ctx, &ids, query)
+	err := db.Conn.SelectContext(ctx, &ids, query)
 	return ids, err
 }
 
 func (db *DB) Drop(ctx context.Context) error {
 	query := `TRUNCATE TABLE comics`
 
-	_, err := db.conn.ExecContext(ctx, query)
+	_, err := db.Conn.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to truncate table: %w", err)
 	}

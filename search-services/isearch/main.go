@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 
+	"github.com/VictoriaMetrics/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"yadro.com/course/closers"
+	"yadro.com/course/isearch/adapters/broker"
 	"yadro.com/course/isearch/adapters/db"
 	isearch "yadro.com/course/isearch/adapters/grpc"
 	"yadro.com/course/isearch/adapters/initiator"
@@ -46,6 +49,7 @@ func run(cfg config.Config, log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to db: %v", err)
 	}
+	defer closers.CloseOrLog(storage.Conn, log)
 
 	// words adapter
 	words, err := words.NewClient(cfg.WordsAddress, log)
@@ -81,11 +85,45 @@ func run(cfg config.Config, log *slog.Logger) error {
 	}()
 
 	defer indexTicker.StopTicker()
+	// broker
+	broker, err := broker.NewBroker(cfg.BrokerAddress, searcher, log)
+	if err != nil {
+		return fmt.Errorf("failed to create broker subscriber: %v", err)
+	}
+	defer closers.CloseOrLog(broker, log)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, req *http.Request) {
+		metrics.WritePrometheus(w, true)
+	})
+
+	metricsServer := &http.Server{
+		Addr:    cfg.MetricsServerAddress,
+		Handler: mux,
+	}
+
+	go func() {
+		log.Info("Starting metrics HTTP server on", "address", cfg.MetricsServerAddress)
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("Metrics server failed", "error", err)
+		}
+	}()
+
+	// проверяем появились ли новые ивенты
+	go func() {
+		err := broker.GetEvent(ctx)
+		if err != nil {
+			log.Error("error when get event", "error", err)
+		}
+	}()
 
 	go func() {
 		<-ctx.Done()
 		log.Debug("shutting down server")
 		s.GracefulStop()
+		if err := metricsServer.Shutdown(context.Background()); err != nil {
+			log.Error("erroneous shutdown", "error", err)
+		}
 	}()
 
 	if err := s.Serve(listener); err != nil {

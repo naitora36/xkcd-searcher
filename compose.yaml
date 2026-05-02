@@ -26,6 +26,7 @@ services:
       - words
       - update
       - search
+      - isearch
 
   words:
     image: words:latest
@@ -58,10 +59,13 @@ services:
       - XKCD_URL=https://xkcd.com
       - XKCD_CONCURRENCY=10
       - WORDS_ADDRESS=words:8080
+      - BROKER_ADDRESS=nats://nats:4222
     depends_on:
       postgres:
         condition: service_healthy
       words:
+        condition: service_started
+      nats:
         condition: service_started
 
   search:
@@ -84,6 +88,7 @@ services:
         condition: service_healthy
       words:
         condition: service_started
+      
 
   isearch:
     image: isearch:latest
@@ -94,18 +99,24 @@ services:
     restart: unless-stopped
     ports:
       - 28084:8080
+      - 28086:8086
     volumes:
       - ./search-services/isearch/config.yaml:/config.yaml
     environment:
+      - METRICS_SERVER_ADDRESS=:8086
       - ISEARCH_ADDRESS=:8080
       - DB_ADDRESS=postgres://postgres:password@postgres:5432/postgres
       - WORDS_ADDRESS=words:8080
-      - INDEX_TTL=20s
+      - BROKER_ADDRESS=nats://nats:4222
+      - INDEX_TTL=24h
     depends_on:
       postgres:
         condition: service_healthy
       words:
         condition: service_started
+      nats:
+        condition: service_started
+      
   tests:
     image: tests:latest
     build: tests
@@ -145,6 +156,23 @@ services:
     depends_on:
       - postgres
 
+  nats:
+    image: nats
+    container_name: nats
+    ports:
+      - "4222:4222"
+      - "8222:8222" 
+    command: "-m 8222"
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:latest
+    ports:
+      - "7777:7777"
+    command:
+      - "-varz" 
+      - "-connz" 
+      - "http://nats:8222" 
+    depends_on:
+      - nats
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.125.0
     container_name: victoriametrics

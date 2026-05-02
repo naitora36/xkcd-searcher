@@ -12,10 +12,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const maxLenDescription = 3000
+const (
+	maxLenDescription = 3000
+	eventUpdate       = "XKCD DB has been updated"
+	eventDrop         = "XKCD DB has been dropped"
+)
 
 type Service struct {
 	log         *slog.Logger
+	broker      Broker
 	db          DB
 	xkcd        XKCD
 	words       Words
@@ -23,7 +28,7 @@ type Service struct {
 	updating    atomic.Bool
 }
 
-func NewService(log *slog.Logger, db DB, xkcd XKCD, words Words, concurrency int) (*Service, error) {
+func NewService(log *slog.Logger, db DB, xkcd XKCD, words Words, broker Broker, concurrency int) (*Service, error) {
 	if concurrency < 1 {
 		return nil, fmt.Errorf("wrong concurrency specified: %d", concurrency)
 	}
@@ -32,11 +37,11 @@ func NewService(log *slog.Logger, db DB, xkcd XKCD, words Words, concurrency int
 		db:          db,
 		xkcd:        xkcd,
 		words:       words,
+		broker:      broker,
 		concurrency: concurrency,
 	}, nil
 }
 
-// Попробовал чуть подразбить логику на более мелкие функции, не знаю насколько удачно получилось...
 func (s *Service) Update(ctx context.Context) (err error) {
 	if !s.updating.CompareAndSwap(false, true) {
 		return ErrAlreadyRunning
@@ -93,6 +98,9 @@ func (s *Service) Update(ctx context.Context) (err error) {
 	if err := g.Wait(); err != nil {
 		return err
 	}
+
+	s.broker.SendEvent(eventUpdate)
+
 	return nil
 }
 
@@ -231,5 +239,12 @@ func (s *Service) Drop(ctx context.Context) error {
 	}
 	defer s.updating.Store(false)
 
-	return s.db.Drop(ctx)
+	err := s.db.Drop(ctx)
+	if err != nil {
+		return err
+	}
+
+	s.broker.SendEvent(eventDrop)
+
+	return nil
 }

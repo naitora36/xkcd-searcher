@@ -17,7 +17,7 @@ func (db *DB) Migrate() error {
 	if err != nil {
 		return err
 	}
-	driver, err := pgx.WithInstance(db.conn.DB, &pgx.Config{})
+	driver, err := pgx.WithInstance(db.Conn.DB, &pgx.Config{})
 	if err != nil {
 		return err
 	}

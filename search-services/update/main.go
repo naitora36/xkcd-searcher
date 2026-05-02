@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"yadro.com/course/closers"
 	updatepb "yadro.com/course/proto/update"
+	"yadro.com/course/update/adapters/broker"
 	"yadro.com/course/update/adapters/db"
 	updategrpc "yadro.com/course/update/adapters/grpc"
 	"yadro.com/course/update/adapters/words"
@@ -49,6 +50,7 @@ func run(cfg config.Config, log *slog.Logger) error {
 	if err := storage.Migrate(); err != nil {
 		return fmt.Errorf("failed to migrate db: %v", err)
 	}
+	defer closers.CloseOrLog(storage.Conn, log)
 
 	// xkcd adapter
 	xkcd, err := xkcd.NewClient(cfg.XKCD.URL, cfg.XKCD.Timeout, log)
@@ -62,8 +64,16 @@ func run(cfg config.Config, log *slog.Logger) error {
 		return fmt.Errorf("failed create Words client: %v", err)
 	}
 	defer closers.CloseOrLog(words.Conn, log)
+
+	// broker adapter
+	broker, err := broker.NewBroker(cfg.BrokerAddress, log)
+	if err != nil {
+		return fmt.Errorf("failed create broker publisher: %v", err)
+	}
+	defer closers.CloseOrLog(broker, log)
+
 	// service
-	updater, err := core.NewService(log, storage, xkcd, words, cfg.XKCD.Concurrency)
+	updater, err := core.NewService(log, storage, xkcd, words, broker, cfg.XKCD.Concurrency)
 	if err != nil {
 		return fmt.Errorf("failed create Update service: %v", err)
 	}

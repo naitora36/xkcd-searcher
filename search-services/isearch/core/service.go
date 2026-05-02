@@ -45,6 +45,12 @@ func (s *Service) BuildIndex(ctx context.Context) error {
 	return nil
 }
 
+func (s *Service) DropIndex() {
+	emptyIndex := &SearchIndex{make(map[string][]int)}
+
+	s.index.Store(emptyIndex)
+}
+
 func (s *Service) SearchIndex(ctx context.Context, req *SearchRequest) (*SearchReply, error) {
 	queryWords, err := s.words.Norm(ctx, req.Phrase)
 	if err != nil {

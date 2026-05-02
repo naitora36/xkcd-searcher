@@ -7,6 +7,7 @@ import (
 type Searcher interface {
 	SearchIndex(ctx context.Context, in *SearchRequest) (*SearchReply, error)
 	BuildIndex(ctx context.Context) error
+	DropIndex()
 }
 type Words interface {
 	Norm(ctx context.Context, phrase string) ([]string, error)
