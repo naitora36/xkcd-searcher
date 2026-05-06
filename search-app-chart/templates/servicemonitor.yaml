@@ -1,0 +1,22 @@
+{{- range $serviceName, $serviceData := .Values.microservices }}
+{{- if $serviceData.metrics }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: {{ $serviceName }}-monitor
+  labels:
+    app: {{ $serviceName }}
+    release: vm 
+spec:
+  selector:
+    matchLabels:
+      app: {{ $serviceName }}
+  endpoints:
+    - port: {{ $serviceData.metrics.portName | default "metrics" }}
+      path: {{ $serviceData.metrics.path | default "/metrics" }}
+      relabelConfigs:
+        - targetLabel: "job"
+          replacement: {{ $serviceName }}
+{{- end }}
+{{- end }}

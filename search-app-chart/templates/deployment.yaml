@@ -1,0 +1,81 @@
+{{- range $serviceName, $serviceData := .Values.microservices }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    app: {{ $serviceName }}
+spec:
+  replicas: {{ default 1 $serviceData.replicas }} 
+  selector:
+    matchLabels:
+      app: {{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        app: {{ $serviceName }}
+      {{- if $serviceData.metrics }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ $serviceData.metrics.port | quote }}
+        prometheus.io/path: {{ default "/metrics" $serviceData.metrics.path | quote }}
+      {{- end }}
+    spec:
+      {{- if $serviceData.waitForDb }}
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:18
+          command:
+            - "sh"
+            - "-c"
+            - |
+              echo "Waiting for PostgreSQL to be ready..."
+              until pg_isready -h postgres -p 5432 -U postgres; do
+                sleep 2
+              done
+              echo "PostgreSQL is ready! Starting the main app..."
+      {{- end }}
+
+      containers:
+        - name: {{ $serviceName }}
+          image: {{ $serviceData.image }}
+          
+          {{- if $serviceData.args }}
+          args:
+            {{- range $arg := $serviceData.args }}
+            - {{ $arg | quote }}
+            {{- end }}
+          {{- end }}
+
+          {{- if not $serviceData.disableConfigMap }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config.yaml
+              subPath: config.yaml
+          {{- end }}
+
+          ports:
+            {{- range $port := $serviceData.ports }}
+            - name: {{ $port.name }}
+              containerPort: {{ $port.containerPort }}
+            {{- end }}
+
+          {{- if $serviceData.env }}
+          env:
+            {{- range $key, $val := $serviceData.env }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+          {{- end }}
+        {{- if $serviceData.sidecars }}
+{{ toYaml $serviceData.sidecars | indent 8 }}
+        {{- end }}
+
+      {{- if not $serviceData.disableConfigMap }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ $serviceName }}-config
+      {{- end }}
+{{- end }}

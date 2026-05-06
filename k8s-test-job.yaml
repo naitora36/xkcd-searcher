@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: search-app-tests
+spec:
+  template:
+    metadata:
+      labels:
+        app: search-app-tests
+    spec:
+      containers:
+      - name: test-runner
+        image: tests:local
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: API_ADDRESS
+          value: "api:8080"
+        - name: WORDS_ADDRESS
+          value: "words:8080"
+        - name: UPDATE_ADDRESS
+          value: "update:8080"
+        - name: SEARCH_ADDRESS
+          value: "search:8080"
+        - name: ISEARCH_ADDRESS
+          value: "isearch:8080"
+      restartPolicy: Never
+  backoffLimit: 0

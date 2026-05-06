@@ -1,0 +1,12 @@
+{{- range $serviceName, $serviceData := .Values.microservices }}
+{{- if not $serviceData.disableConfigMap }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $serviceName }}-config
+data:
+  config.yaml: |
+{{ $.Files.Get (printf "configs/%s.yaml" $serviceName) | indent 4 }}
+{{- end }}
+{{- end }}

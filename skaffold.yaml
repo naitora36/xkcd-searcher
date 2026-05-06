@@ -1,0 +1,78 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: search-app
+build:
+  local:
+    push: false 
+  artifacts:
+    - image: api
+      context: search-services
+      docker:
+        dockerfile: Dockerfile.api
+    - image: words
+      context: search-services
+      docker:
+        dockerfile: Dockerfile.words
+    - image: update
+      context: search-services
+      docker:
+        dockerfile: Dockerfile.update
+    - image: search
+      context: search-services
+      docker:
+        dockerfile: Dockerfile.search
+    - image: isearch
+      context: search-services
+      docker:
+        dockerfile: Dockerfile.isearch
+
+deploy:
+  helm:
+    releases:
+      - name: search-app
+        chartPath: ./search-app-chart 
+        valuesFiles:
+          - ./search-app-chart/values.yaml
+        setValueTemplates:
+          microservices.api.image: "{{.IMAGE_FULLY_QUALIFIED_api}}"
+          microservices.words.image: "{{.IMAGE_FULLY_QUALIFIED_words}}"
+          microservices.update.image: "{{.IMAGE_FULLY_QUALIFIED_update}}"
+          microservices.search.image: "{{.IMAGE_FULLY_QUALIFIED_search}}"
+          microservices.isearch.image: "{{.IMAGE_FULLY_QUALIFIED_isearch}}"
+          testImage: "{{.IMAGE_FULLY_QUALIFIED_tests}}"
+
+verify:
+  - name: integration-tests
+    container:
+      name: test-executor
+      image: tests 
+      env:
+        - name: API_ADDRESS
+          value: "api:8080"
+        - name: WORDS_ADDRESS
+          value: "words:8080"
+        - name: UPDATE_ADDRESS
+          value: "update:8080"
+        - name: SEARCH_ADDRESS
+          value: "search:8080"
+        - name: ISEARCH_ADDRESS
+          value: "isearch:8080"
+
+
+portForward:
+  - resourceType: service
+    resourceName: api
+    port: 8080
+    localPort: 28080
+
+  - resourceType: service
+    resourceName: pgadmin    
+    port: 80                
+    localPort: 18888      
+
+  - resourceType: service
+    resourceName: vm-grafana   
+    port: 80
+    localPort: 3000
+ 

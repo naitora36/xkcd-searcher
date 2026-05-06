@@ -45,3 +45,52 @@ tools:
 	@echo "checking protobuf compiler, if it fails follow guide at https://protobuf.dev/installation/"
 	@which -s protoc && echo OK || exit 1
 
+install-repos:
+	@echo "Adding Helm repositories..."
+	helm repo add victoria-metrics https://victoriametrics.github.io/helm-charts/
+	helm repo add grafana https://grafana.github.io/helm-charts
+	helm repo update
+
+install-infra:
+	@echo "Installing VictoriaMetrics Stack..."
+	helm upgrade --install vm victoria-metrics/victoria-metrics-k8s-stack \
+		--set victoria-metrics-operator.enabled=true \
+		--rollback-on-failure
+
+	@echo "Installing Loki Stack..."
+	helm upgrade --install loki grafana/loki-stack \
+		--set loki.persistence.enabled=true \
+		--set loki.persistence.size=1Gi \
+		--set promtail.enabled=true \
+		--set grafana.sidecar.datasources.isDefault=false \
+		--rollback-on-failure
+
+clean-infra:
+	helm uninstall vm || true
+	helm uninstall loki || true
+	kubectl delete pvc -l app.kubernetes.io/instance=vm || true
+	kubectl delete pvc -l app.kubernetes.io/instance=loki || true
+
+build-deps:
+	@echo "Building dependencies for search-app-chart..."
+	helm dependency build ./search-app-chart
+
+minikube-up:
+	minikube start --memory=4192 --cpus=4
+	skaffold dev
+
+minikube-setup: install-repos install-infra build-deps
+	@echo "Infrastructure is ready!"
+
+minikube-test:
+	@echo "Building tests image..."
+	eval $$(minikube docker-env) && docker build -t tests:local ./tests
+	@echo "Cleaning up old jobs..."
+	kubectl delete job search-app-tests --ignore-not-found
+	@echo "Starting tests in K8s..."
+	kubectl apply -f k8s-test-job.yaml
+	@echo "Waiting for pod to start..."
+	sleep 3
+	kubectl logs -f job/search-app-tests
+	@echo "Checking final status..."
+	kubectl wait --for=condition=complete job/search-app-tests --timeout=600s

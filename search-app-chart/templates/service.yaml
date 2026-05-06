@@ -1,0 +1,23 @@
+{{- range $serviceName, $serviceData := .Values.microservices }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:                      
+    app: {{ $serviceName }}
+spec:
+  selector:
+    app: {{ $serviceName }}
+  ports:
+    {{- range $port := $serviceData.ports }}
+    - name: {{ $port.name }}
+      port: {{ $port.containerPort }}
+      targetPort: {{ $port.name }}
+      {{- if eq $port.name "grpc" }}
+      appProtocol: grpc
+      {{- else if eq $port.name "http" }}
+      appProtocol: http
+      {{- end }}
+    {{- end }}
+{{- end }}
